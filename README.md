@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>DEPOSIT MANAGER</title>
+  <title>DEPOSIT MANAGER with OCR</title>
+  <!-- Tesseract.js (OCR用ライブラリ) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
   <style>
     :root {
       --bg: #030712; --card: #111827; --card-border: #374151; --primary: #10b981; --text: #f9fafb; --sub: #9ca3af; --border: #4b5563; --red: #ef4444; --reply: #3b82f6; --did-color: #6b7280;
@@ -61,7 +63,6 @@
     .img-thumb { width: 50px; height: 50px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; }
     .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
 
-    /* サマリーセクション */
     .summary-box { background: #0b0f19; border: 2px solid var(--card-border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem; }
     .summary-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #1f2937; padding-bottom: 4px; }
     .summary-row:last-child { border-bottom: none; }
@@ -72,8 +73,8 @@
     .m-card { background: var(--card); border: 3px solid var(--card-border); border-radius: 18px; width: 100%; max-width: 480px; max-height: 90vh; display: flex; flex-direction: column; padding: 16px; gap: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.7); }
     .m-head { font-weight: bold; font-size: 0.95rem; color: var(--primary); display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 8px; }
     
-    #loadingOverlay { display: none; position: fixed; inset: 0; background: rgba(3,7,18,0.4); z-index: 30000; justify-content: center; align-items: center; pointer-events: none; }
-    .loading-box { background: linear-gradient(145deg, #111827, #06241b); border: 4px solid var(--primary); padding: 20px 30px; border-radius: 20px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(16,185,129,0.4); }
+    #loadingOverlay { display: none; position: fixed; inset: 0; background: rgba(3,7,18,0.5); z-index: 30000; justify-content: center; align-items: center; pointer-events: none; }
+    .loading-box { background: linear-gradient(145deg, #111827, #06241b); border: 4px solid var(--primary); padding: 20px 30px; border-radius: 20px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(16,185,129,0.4); pointer-events: auto; }
     .spinner { width: 32px; height: 32px; border: 4px solid rgba(16, 185, 129, 0.2); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
@@ -83,13 +84,13 @@
   <div id="loadingOverlay">
     <div class="loading-box">
       <div class="spinner"></div>
-      <div style="font-size: 1.05rem; font-weight: 900; color: var(--primary);">処理中...</div>
+      <div id="loadingText" style="font-size: 1.05rem; font-weight: 900; color: var(--primary);">画像を解析中...</div>
     </div>
   </div>
 
   <div class="app">
     <header>
-      <div class="brand">DEPOSIT MANAGER</div>
+      <div class="brand">DEPOSIT MANAGER + OCR</div>
       <div class="btns">
         <button class="ibtn" onclick="exportData()">データ書き出し</button>
       </div>
@@ -100,7 +101,7 @@
     <div class="main">
       <!-- 新規入金登録カード -->
       <section class="card new-post-card">
-        <div class="c-title"><span>新規入金データの登録</span></div>
+        <div class="c-title"><span>新規入金データの登録 (OCR対応)</span></div>
         
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
@@ -123,22 +124,22 @@
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">入金名義 (振込人)</label>
-            <input type="text" id="inputPayer" class="d-inp" placeholder="例: カ）ヤマダストア">
+            <input type="text" id="inputPayer" class="d-inp" placeholder="自動入力または手入力">
           </div>
           <div class="form-group">
             <label class="form-label">金額 (円)</label>
-            <input type="number" id="inputAmount" class="d-inp" placeholder="例: 50000">
+            <input type="number" id="inputAmount" class="d-inp" placeholder="自動入力または手入力">
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">入金書類・通帳の写し (複数枚選択可・自動リサイズ)</label>
+          <label class="form-label">入金書類・通帳の写し (画像選択で自動OCR読取)</label>
           <div class="preview-container" id="previewContainer">
-            <span style="font-size: 0.75rem; color: var(--sub); align-self: center;">画像が選択されていません</span>
+            <span style="font-size: 0.75rem; color: var(--sub); align-self: center;">画像を選択すると自動で文字を読み取ります</span>
           </div>
           <div class="tools">
             <label class="btn" style="cursor:pointer; background:var(--reply); color:white; border-color:var(--reply);">
-              ＋ 書類画像を選択
+              ＋ 書類画像を選択してOCR
               <input type="file" accept="image/*" multiple style="display:none;" onchange="handleImagesSelect(event)">
             </label>
             <button class="sbtn" onclick="submitDeposit()">入金を登録する</button>
@@ -148,7 +149,7 @@
 
       <!-- 日別集計サマリー -->
       <section class="card" style="background:#0b0f19;">
-        <div class="c-title"><span>本日の担当別・合計集計</span><span id="summaryDateLabel" style="font-size:0.75rem; color:var(--sub);">--</span></div>
+        <div class="c-title"><span>担当別・合計集計</span><span id="summaryDateLabel" style="font-size:0.75rem; color:var(--sub);">累計</span></div>
         <div class="summary-box" id="dailySummaryBox">
           <div style="color:var(--sub); text-align:center; padding:6px;">データはありません</div>
         </div>
@@ -174,7 +175,7 @@
 
   <script>
     let deposits = JSON.parse(localStorage.getItem('DM_DEPOSITS')) || [];
-    let currentUploadedImages = []; // 選択中の画像データ配列
+    let currentUploadedImages = [];
 
     window.onload = () => {
       initDate();
@@ -185,30 +186,55 @@
     function initDate() {
       const now = new Date();
       const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()]})</span><span>入金管理システム</span>`;
+      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()]})</span><span>入金管理 + OCR</span>`;
       
-      // 日付入力の初期値を本日に設定
       const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
       document.getElementById('inputDate').value = dateStr;
-      document.getElementById('summaryDateLabel').innerText = `${now.getMonth()+1}月${now.getDate()}日分`;
     }
 
-    // 複数画像選択＆自動リサイズ
-    function handleImagesSelect(e) {
+    // 画像選択 ＆ OCR自動解析 ＆ リサイズ
+    async function handleImagesSelect(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
-      showLoading('画像を最適化中...');
-      let processedCount = 0;
+      showLoading('画像を最適化＆OCR解析中...');
 
-      Array.from(files).forEach(file => {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // 1. 画像圧縮・リサイズ処理
+        const compressedDataUrl = await resizeImage(file);
+        currentUploadedImages.push(compressedDataUrl);
+
+        // 2. 最初の1枚に対してTesseract.jsでOCR実行
+        if (i === 0) {
+          try {
+            const result = await Tesseract.recognize(compressedDataUrl, 'jpn+eng', {
+              logger: m => {} // 進捗ログ
+            });
+            const text = result.data.text;
+            parseOcrText(text);
+          } catch (err) {
+            console.log('OCR解析エラー:', err);
+          }
+        }
+      }
+
+      hideLoading();
+      renderPreviews();
+      e.target.value = '';
+    }
+
+    // 画像リサイズ関数
+    function resizeImage(file) {
+      return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = ev => {
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
             let w = img.width, h = img.height;
-            const MAX_SIZE = 800; // 最適化サイズ
+            const MAX_SIZE = 900;
             if (w > MAX_SIZE || h > MAX_SIZE) {
               if (w > h) { h = Math.round(h * (MAX_SIZE / w)); w = MAX_SIZE; }
               else { w = Math.round(w * (MAX_SIZE / h)); h = MAX_SIZE; }
@@ -218,27 +244,49 @@
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, w, h);
-            
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-            currentUploadedImages.push(compressedDataUrl);
-
-            processedCount++;
-            if (processedCount === files.length) {
-              hideLoading();
-              renderPreviews();
-            }
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
           };
           img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
       });
-      e.target.value = ''; // リセット
+    }
+
+    // OCRテキストから金額・名義・担当者を自動抽出するロジック
+    function parseOcrText(text) {
+      console.log("OCR読取結果:", text);
+
+      // 担当者の自動判定（大、草、菊、林、千 または フルネーム）
+      const staffSelect = document.getElementById('inputStaff');
+      if (text.includes('大') || text.includes('大和地')) staffSelect.value = '大和地';
+      else if (text.includes('草') || text.includes('草野')) staffSelect.value = '草野';
+      else if (text.includes('菊') || text.includes('菊池')) staffSelect.value = '菊池';
+      else if (text.includes('林')) staffSelect.value = '林';
+      else if (text.includes('千') || text.includes('高橋')) staffSelect.value = '高橋';
+
+      // 金額の抽出（4桁〜7桁の数字、または¥マークの後の数字を探索）
+      const cleanedText = text.replace(/[,，]/g, '');
+      const amountMatches = cleanedText.match(/(?:¥|￥)?\s*([1-9][0-9]{3,6})\s*(?:円)?/g);
+      if (amountMatches && amountMatches.length > 0) {
+        // 最も大きそうな数値、または最初に見つかった金額候補を採用
+        let nums = amountMatches.map(m => m.replace(/[^0-9]/g, '')).map(Number);
+        let maxNum = Math.max(...nums);
+        if (maxNum >= 1000) {
+          document.getElementById('inputAmount').value = maxNum;
+        }
+      }
+
+      // 名義の簡易抽出（株式会社 や カ）などの法人名、またはそれらしい文字列を探す
+      const companyMatch = text.match(/(?:株式会社|有限会社|合同会社|カ\)|ｺ\)).{1,10}/);
+      if (companyMatch) {
+        document.getElementById('inputPayer').value = companyMatch[0];
+      }
     }
 
     function renderPreviews() {
       const container = document.getElementById('previewContainer');
       if (currentUploadedImages.length === 0) {
-        container.innerHTML = `<span style="font-size: 0.75rem; color: var(--sub); align-self: center;">画像が選択されていません</span>`;
+        container.innerHTML = `<span style="font-size: 0.75rem; color: var(--sub); align-self: center;">画像を選択すると自動で文字を読み取ります</span>`;
         return;
       }
       container.innerHTML = currentUploadedImages.map((imgSrc, idx) => `
@@ -254,13 +302,13 @@
       renderPreviews();
     }
 
-    // 入力テキストや名義から自動で担当者を推論する補助機能
+    // 手動入力時の担当者連動
     document.getElementById('inputPayer').addEventListener('input', (e) => {
       const val = e.target.value;
       const staffSelect = document.getElementById('inputStaff');
-      if (val.includes('大') || val.includes('大和地')) staffSelect.value = '大和地';
-      else if (val.includes('草') || val.includes('草野')) staffSelect.value = '草野';
-      else if (val.includes('菊') || val.includes('菊池')) staffSelect.value = '菊池';
+      if (val.includes('大')) staffSelect.value = '大和地';
+      else if (val.includes('草')) staffSelect.value = '草野';
+      else if (val.includes('菊')) staffSelect.value = '菊池';
       else if (val.includes('林')) staffSelect.value = '林';
       else if (val.includes('千') || val.includes('高橋')) staffSelect.value = '高橋';
     });
@@ -272,7 +320,7 @@
       const amount = Number(document.getElementById('inputAmount').value);
 
       if (!date || !payer || !amount) {
-        alert('「入金日」「入金名義」「金額」を正しく入力してください。');
+        alert('「入金日」「入金名義」「金額」を確認してください。');
         return;
       }
 
@@ -338,7 +386,7 @@
                   <span class="dep-tag">${d.staff}</span>
                   <span class="dep-name">${d.payer}</span>
                 </div>
-                <div style="font-size:0.7rem; color:var(--sub);">登録ID: ${d.id}</div>
+                <div style="font-size:0.7rem; color:var(--sub);">ID: ${d.id}</div>
               </div>
               <div class="dep-amount">¥${d.amount.toLocaleString()}</div>
             </div>
@@ -350,16 +398,12 @@
 
     function renderDailySummary() {
       const summaryBox = document.getElementById('dailySummaryBox');
-      const todayStr = document.getElementById('inputDate').value || new Date().toISOString().split('T')[0];
-      
-      // 本日のデータ、または全データの集計
       const staffList = ['大和地', '草野', '菊池', '林', '高橋', '未指定'];
       let totals = {};
       staffList.forEach(s => totals[s] = 0);
       let grandTotal = 0;
 
       deposits.forEach(d => {
-        // 全期間または日付ごとの切り替え（ここでは全期間の担当別集計を表示）
         if (totals[d.staff] !== undefined) {
           totals[d.staff] += d.amount;
         } else {
@@ -409,6 +453,7 @@
     }
 
     function showLoading(text) {
+      document.getElementById('loadingText').innerText = text;
       document.getElementById('loadingOverlay').style.display = 'flex';
     }
     function hideLoading() {
