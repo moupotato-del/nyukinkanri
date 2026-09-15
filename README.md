@@ -1,10 +1,10 @@
-
-
+```html
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>DEPOSIT AUTO MANAGER - High Accuracy</title>
+  <title>DEPOSIT AUTO MANAGER (Fixed)</title>
   <!-- Tesseract.js (OCR用ライブラリ) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
   <style>
@@ -77,7 +77,7 @@
 
   <div class="app">
     <header>
-      <div class="brand">DEPOSIT AUTO MANAGER (HQ)</div>
+      <div class="brand">DEPOSIT AUTO MANAGER</div>
       <div class="btns">
         <button class="ibtn" onclick="exportData()">データ書き出し</button>
       </div>
@@ -85,13 +85,14 @@
 
     <div class="date-banner" id="todayDateBanner">読み込み中...</div>
 
-    <div class="main">
+    <!-- メインスクロールコンテナ -->
+    <div class="main" id="mainContainer">
       <section class="card new-post-card">
-        <div class="c-title"><span>入金書類・通帳のアップロード (高精度OCR)</span></div>
+        <div class="c-title"><span>入金書類・通帳のアップロード</span></div>
         <label class="drop-zone">
           <div style="font-size: 1.5rem;">📸</div>
           <div style="font-weight: 900; font-size: 0.9rem; color: var(--primary);">タップして画像を選択・撮影</div>
-          <div style="font-size: 0.7rem; color: var(--sub);">複数枚同時選択可。前処理をかけて高精度に自動整理します。</div>
+          <div style="font-size: 0.7rem; color: var(--sub);">複数枚同時選択可。自動で解析され表に整理されます。</div>
           <input type="file" accept="image/*" multiple style="display:none;" onchange="handleImagesUpload(event)">
         </label>
       </section>
@@ -122,7 +123,7 @@
   </div>
 
   <script>
-    let deposits = JSON.parse(localStorage.getItem('DAM_HQ_DEPOSITS')) || [];
+    let deposits = JSON.parse(localStorage.getItem('DAM_FIXED_DEPOSITS')) || [];
 
     window.onload = () => {
       initDate();
@@ -133,18 +134,21 @@
     function initDate() {
       const now = new Date();
       const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()].toUpperCase()})</span><span>高精度解析モード</span>`;
+      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()].toUpperCase()})</span><span>自動解析モード</span>`;
     }
 
     async function handleImagesUpload(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
+      // 現在のスクロール位置を保持
+      const mainContainer = document.getElementById('mainContainer');
+      const currentScrollTop = mainContainer.scrollTop;
+
       showLoading(`全 ${files.length} 枚を高精度前処理＆解析中...`);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        // 高精度化のための前処理済み画像データ生成
         const processedDataUrl = await preprocessImageForOCR(file);
 
         try {
@@ -179,10 +183,15 @@
 
       saveAndRefresh();
       hideLoading();
+      
+      // 描画後に元のスクロール位置に戻す
+      setTimeout(() => {
+        mainContainer.scrollTop = currentScrollTop;
+      }, 50);
+
       e.target.value = '';
     }
 
-    // 画像の前処理（コントラスト強調・グレースケール化によるOCR精度向上）
     function preprocessImageForOCR(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -191,7 +200,7 @@
           img.onload = () => {
             const canvas = document.createElement('canvas');
             let w = img.width, h = img.height;
-            const MAX_SIZE = 1200; // 解像度を高めに維持して文字潰れを防ぐ
+            const MAX_SIZE = 1200;
             if (w > MAX_SIZE || h > MAX_SIZE) {
               if (w > h) { h = Math.round(h * (MAX_SIZE / w)); w = MAX_SIZE; }
               else { w = Math.round(w * (MAX_SIZE / h)); h = MAX_SIZE; }
@@ -200,13 +209,11 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
 
-            // 画像のコントラストとシャープネスを高める簡易フィルター処理
             let imgData = ctx.getImageData(0, 0, w, h);
             let d = imgData.data;
             for (let i = 0; i < d.length; i += 4) {
-              // グレースケール化＆コントラスト強調
               let avg = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
-              let enhanced = avg < 110 ? avg * 0.7 : (avg > 200 ? 255 : avg); // 黒文字を濃く、背景を白く
+              let enhanced = avg < 110 ? avg * 0.7 : (avg > 200 ? 255 : avg);
               d[i] = enhanced;
               d[i+1] = enhanced;
               d[i+2] = enhanced;
@@ -220,7 +227,6 @@
       });
     }
 
-    // 高精度なキーワードマッチングとパターン抽出ロジック
     function parseOcrDataHighAccuracy(text) {
       const nowYear = new Date().getFullYear();
       let date = `${nowYear}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
@@ -228,7 +234,6 @@
       let payer = '不明名義';
       let amount = 0;
 
-      // 1. 日付抽出 (年月日パターン)
       let dateMatch = text.match(/(20[2-3][0-9])[\/\-年\s]*([1-9]|1[0-2])[\/\-月\s]*([1-9]|[1-2][0-9]|3[0-1])/);
       if (dateMatch) {
         date = `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, '0')}-${String(dateMatch[3]).padStart(2, '0')}`;
@@ -239,7 +244,6 @@
         }
       }
 
-      // 2. 担当 / 店舗 抽出（あいまい・部分一致対応）
       const cleanText = text.replace(/[\s\n\r]/g, '');
       if (cleanText.includes('デコレ')) {
         staff = 'デコレ';
@@ -257,7 +261,6 @@
         staff = '未記入不明店舗';
       }
 
-      // 3. 金額抽出（数値の最大値を検出、カンマ除去）
       const cleanedNumText = text.replace(/[,，]/g, '');
       const amountMatches = cleanedNumText.match(/(?:¥|￥|円)?\s*([1-9][0-9]{3,7})\s*(?:円)?/g);
       if (amountMatches && amountMatches.length > 0) {
@@ -266,12 +269,10 @@
         if (maxNum >= 1000) amount = maxNum;
       }
 
-      // 4. 名義抽出（法人格や特徴的な文字列）
       let payerMatch = text.match(/(?:株式会社|有限会社|合同会社|カ\)|ｺ\)).{1,12}/);
       if (payerMatch) {
         payer = payerMatch[0];
       } else {
-        // カタカナや人名っぽい部分の拾い上げ
         let kanaMatch = text.match(/[ァ-ンー]{3,10}/);
         if (kanaMatch) payer = kanaMatch[0];
       }
@@ -281,13 +282,20 @@
 
     function deleteDeposit(id) {
       if (confirm('この入金データを削除しますか？')) {
+        const mainContainer = document.getElementById('mainContainer');
+        const currentScrollTop = mainContainer.scrollTop;
+
         deposits = deposits.filter(d => d.id !== id);
         saveAndRefresh();
+
+        setTimeout(() => {
+          mainContainer.scrollTop = currentScrollTop;
+        }, 50);
       }
     }
 
     function saveAndRefresh() {
-      localStorage.setItem('DAM_HQ_DEPOSITS', JSON.stringify(deposits));
+      localStorage.setItem('DAM_FIXED_DEPOSITS', JSON.stringify(deposits));
       renderTable();
       renderDailySummary();
     }
