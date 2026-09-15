@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>DEPOSIT AUTO MANAGER</title>
+  <title>DEPOSIT AUTO MANAGER - High Accuracy</title>
   <!-- Tesseract.js (OCR用ライブラリ) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
   <style>
@@ -43,9 +43,6 @@
     }
     .drop-zone:active { background: rgba(16, 185, 129, 0.15); }
 
-    .sbtn { background: var(--primary); color: #000; border: none; padding: 12px 20px; border-radius: 10px; font-weight: 900; font-size: 0.95rem; cursor: pointer; width: 100%; box-shadow: 0 4px 10px rgba(16,185,129,0.4); text-align: center; }
-
-    /* 表形式デザイン */
     .table-container { width: 100%; overflow-x: auto; background: #020408; border-radius: 10px; border: 2px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.75rem; text-align: left; }
     th { background: #1f2937; color: var(--primary); padding: 8px; font-weight: bold; border-bottom: 2px solid var(--border); white-space: nowrap; }
@@ -73,13 +70,13 @@
   <div id="loadingOverlay">
     <div class="loading-box">
       <div class="spinner"></div>
-      <div id="loadingText" style="font-size: 1.05rem; font-weight: 900; color: var(--primary);">画像を自動解析中...</div>
+      <div id="loadingText" style="font-size: 1.05rem; font-weight: 900; color: var(--primary);">高精度解析中...</div>
     </div>
   </div>
 
   <div class="app">
     <header>
-      <div class="brand">DEPOSIT AUTO MANAGER</div>
+      <div class="brand">DEPOSIT AUTO MANAGER (HQ)</div>
       <div class="btns">
         <button class="ibtn" onclick="exportData()">データ書き出し</button>
       </div>
@@ -88,27 +85,23 @@
     <div class="date-banner" id="todayDateBanner">読み込み中...</div>
 
     <div class="main">
-      <!-- 画像添付だけの簡単アップロードカード -->
       <section class="card new-post-card">
-        <div class="c-title"><span>入金書類・通帳のアップロード</span></div>
-        
+        <div class="c-title"><span>入金書類・通帳のアップロード (高精度OCR)</span></div>
         <label class="drop-zone">
-          <div style="font-size: 1.5rem;">📁</div>
+          <div style="font-size: 1.5rem;">📸</div>
           <div style="font-weight: 900; font-size: 0.9rem; color: var(--primary);">タップして画像を選択・撮影</div>
-          <div style="font-size: 0.7rem; color: var(--sub);">複数枚同時に選べます。自動で解析され表に整理されます。</div>
+          <div style="font-size: 0.7rem; color: var(--sub);">複数枚同時選択可。前処理をかけて高精度に自動整理します。</div>
           <input type="file" accept="image/*" multiple style="display:none;" onchange="handleImagesUpload(event)">
         </label>
       </section>
 
-      <!-- 担当・店舗別 合計集計 -->
       <section class="card" style="background:#0b0f19;">
-        <div class="c-title"><span>担当・店舗別 合計集計</span><span id="summaryDateLabel" style="font-size:0.75rem; color:var(--sub);">累計</span></div>
+        <div class="c-title"><span>担当・店舗別 合計集計</span></div>
         <div class="summary-box" id="dailySummaryBox">
           <div style="color:var(--sub); text-align:center; padding:6px;">データはありません</div>
         </div>
       </section>
 
-      <!-- 入金整理テーブル -->
       <section class="card">
         <div class="c-title"><span>入金一覧テーブル</span></div>
         <div class="table-container" id="tableContainer">
@@ -118,7 +111,6 @@
     </div>
   </div>
 
-  <!-- 画像プレビューモーダル -->
   <div class="modal" id="imageModal" onclick="closeModal('imageModal')">
     <div class="m-card" style="max-width:90vw; background:#000; padding:10px;" onclick="event.stopPropagation()">
       <div class="m-head"><span>添付画像</span><button class="ibtn" onclick="closeModal('imageModal')">✕</button></div>
@@ -129,7 +121,7 @@
   </div>
 
   <script>
-    let deposits = JSON.parse(localStorage.getItem('DAM_DEPOSITS')) || [];
+    let deposits = JSON.parse(localStorage.getItem('DAM_HQ_DEPOSITS')) || [];
 
     window.onload = () => {
       initDate();
@@ -140,50 +132,45 @@
     function initDate() {
       const now = new Date();
       const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()].toUpperCase()})</span><span>完全自動解析モード</span>`;
+      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()].toUpperCase()})</span><span>高精度解析モード</span>`;
     }
 
-    // 複数画像を受け取り、すべて自動解析してテーブルに追加する
     async function handleImagesUpload(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
-      showLoading(`全 ${files.length} 枚の画像を自動解析中...`);
+      showLoading(`全 ${files.length} 枚を高精度前処理＆解析中...`);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const compressedDataUrl = await resizeImage(file);
+        // 高精度化のための前処理済み画像データ生成
+        const processedDataUrl = await preprocessImageForOCR(file);
 
         try {
-          const result = await Tesseract.recognize(compressedDataUrl, 'jpn+eng', {
+          const result = await Tesseract.recognize(processedDataUrl, 'jpn+eng', {
             logger: m => {}
           });
           const text = result.data.text;
-          
-          // OCR結果からデータを自動抽出
-          const parsed = parseOcrData(text);
+          const parsed = parseOcrDataHighAccuracy(text);
 
-          const newDeposit = {
+          deposits.unshift({
             id: 'D_' + Date.now() + '_' + i,
             date: parsed.date,
             staff: parsed.staff,
             payer: parsed.payer,
             amount: parsed.amount,
-            image: compressedDataUrl,
+            image: processedDataUrl,
             createdAt: new Date().getTime()
-          };
-
-          deposits.unshift(newDeposit);
+          });
         } catch (err) {
           console.log('OCR解析エラー:', err);
-          // エラー時も未記入として追加
           deposits.unshift({
             id: 'D_' + Date.now() + '_' + i,
             date: new Date().toISOString().split('T')[0],
             staff: '未記入不明店舗',
             payer: '解析エラー/不明',
             amount: 0,
-            image: compressedDataUrl,
+            image: processedDataUrl,
             createdAt: new Date().getTime()
           });
         }
@@ -194,7 +181,8 @@
       e.target.value = '';
     }
 
-    function resizeImage(file) {
+    // 画像の前処理（コントラスト強調・グレースケール化によるOCR精度向上）
+    function preprocessImageForOCR(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = ev => {
@@ -202,17 +190,28 @@
           img.onload = () => {
             const canvas = document.createElement('canvas');
             let w = img.width, h = img.height;
-            const MAX_SIZE = 900;
+            const MAX_SIZE = 1200; // 解像度を高めに維持して文字潰れを防ぐ
             if (w > MAX_SIZE || h > MAX_SIZE) {
               if (w > h) { h = Math.round(h * (MAX_SIZE / w)); w = MAX_SIZE; }
               else { w = Math.round(w * (MAX_SIZE / h)); h = MAX_SIZE; }
             }
             canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL('image/jpeg', 0.75));
+
+            // 画像のコントラストとシャープネスを高める簡易フィルター処理
+            let imgData = ctx.getImageData(0, 0, w, h);
+            let d = imgData.data;
+            for (let i = 0; i < d.length; i += 4) {
+              // グレースケール化＆コントラスト強調
+              let avg = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
+              let enhanced = avg < 110 ? avg * 0.7 : (avg > 200 ? 255 : avg); // 黒文字を濃く、背景を白く
+              d[i] = enhanced;
+              d[i+1] = enhanced;
+              d[i+2] = enhanced;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
           };
           img.src = ev.target.result;
         };
@@ -220,16 +219,16 @@
       });
     }
 
-    // OCRテキストから日付・担当・名義・金額を自動抽出するロジック
-    function parseOcrData(text) {
+    // 高精度なキーワードマッチングとパターン抽出ロジック
+    function parseOcrDataHighAccuracy(text) {
       const nowYear = new Date().getFullYear();
       let date = `${nowYear}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
       let staff = '未記入不明店舗';
       let payer = '不明名義';
       let amount = 0;
 
-      // 1. 日付抽出
-      let dateMatch = text.match(/(20[2-3][0-9])[\/\-年\s]+([1-9]|1[0-2])[\/\-月\s]+([1-9]|[1-2][0-9]|3[0-1])/);
+      // 1. 日付抽出 (年月日パターン)
+      let dateMatch = text.match(/(20[2-3][0-9])[\/\-年\s]*([1-9]|1[0-2])[\/\-月\s]*([1-9]|[1-2][0-9]|3[0-1])/);
       if (dateMatch) {
         date = `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, '0')}-${String(dateMatch[3]).padStart(2, '0')}`;
       } else {
@@ -239,36 +238,41 @@
         }
       }
 
-      // 2. 担当 / 店舗 抽出
-      if (text.includes('デコレ')) {
+      // 2. 担当 / 店舗 抽出（あいまい・部分一致対応）
+      const cleanText = text.replace(/[\s\n\r]/g, '');
+      if (cleanText.includes('デコレ')) {
         staff = 'デコレ';
-      } else if (text.includes('大') || text.includes('大和地')) {
+      } else if (cleanText.includes('大和地') || cleanText.includes('大和') || cleanText.includes('豊')) {
         staff = '大和地';
-      } else if (text.includes('草') || text.includes('草野')) {
+      } else if (cleanText.includes('草野') || cleanText.includes('草')) {
         staff = '草野';
-      } else if (text.includes('菊') || text.includes('菊池')) {
+      } else if (cleanText.includes('菊池') || cleanText.includes('菊')) {
         staff = '菊池';
-      } else if (text.includes('林')) {
+      } else if (cleanText.includes('林')) {
         staff = '林';
-      } else if (text.includes('千') || text.includes('高橋')) {
+      } else if (cleanText.includes('高橋') || cleanText.includes('千')) {
         staff = '高橋';
       } else {
         staff = '未記入不明店舗';
       }
 
-      // 3. 金額抽出
-      const cleanedText = text.replace(/[,，]/g, '');
-      const amountMatches = cleanedText.match(/(?:¥|￥)?\s*([1-9][0-9]{3,6})\s*(?:円)?/g);
+      // 3. 金額抽出（数値の最大値を検出、カンマ除去）
+      const cleanedNumText = text.replace(/[,，]/g, '');
+      const amountMatches = cleanedNumText.match(/(?:¥|￥|円)?\s*([1-9][0-9]{3,7})\s*(?:円)?/g);
       if (amountMatches && amountMatches.length > 0) {
         let nums = amountMatches.map(m => m.replace(/[^0-9]/g, '')).map(Number);
         let maxNum = Math.max(...nums);
         if (maxNum >= 1000) amount = maxNum;
       }
 
-      // 4. 名義抽出
-      const companyMatch = text.match(/(?:株式会社|有限会社|合同会社|カ\)|ｺ\)).{1,10}/);
-      if (companyMatch) {
-        payer = companyMatch[0];
+      // 4. 名義抽出（法人格や特徴的な文字列）
+      let payerMatch = text.match(/(?:株式会社|有限会社|合同会社|カ\)|ｺ\)).{1,12}/);
+      if (payerMatch) {
+        payer = payerMatch[0];
+      } else {
+        // カタカナや人名っぽい部分の拾い上げ
+        let kanaMatch = text.match(/[ァ-ンー]{3,10}/);
+        if (kanaMatch) payer = kanaMatch[0];
       }
 
       return { date, staff, payer, amount };
@@ -282,12 +286,11 @@
     }
 
     function saveAndRefresh() {
-      localStorage.setItem('DAM_DEPOSITS', JSON.stringify(deposits));
+      localStorage.setItem('DAM_HQ_DEPOSITS', JSON.stringify(deposits));
       renderTable();
       renderDailySummary();
     }
 
-    // テーブル形式でデータ一覧を描画
     function renderTable() {
       const container = document.getElementById('tableContainer');
       if (deposits.length === 0) {
@@ -329,7 +332,6 @@
       container.innerHTML = html;
     }
 
-    // 集計サマリー
     function renderDailySummary() {
       const summaryBox = document.getElementById('dailySummaryBox');
       const staffList = ['大和地', '草野', '菊池', '林', '高橋', 'デコレ', '未記入不明店舗'];
@@ -380,7 +382,7 @@
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(deposits, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `deposit_table_${new Date().toISOString().split('T')[0]}.json`);
+      downloadAnchor.setAttribute("download", `deposit_hq_data_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
