@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>DEPOSIT MANAGER with OCR</title>
+  <title>DEPOSIT MANAGER + OCR</title>
   <!-- Tesseract.js (OCR用ライブラリ) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
   <style>
@@ -101,7 +101,7 @@
     <div class="main">
       <!-- 新規入金登録カード -->
       <section class="card new-post-card">
-        <div class="c-title"><span>新規入金データの登録 (OCR対応)</span></div>
+        <div class="c-title"><span>新規入金データの登録</span></div>
         
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
@@ -109,14 +109,15 @@
             <input type="date" id="inputDate" class="d-inp">
           </div>
           <div class="form-group">
-            <label class="form-label">担当者</label>
+            <label class="form-label">担当 / 分類</label>
             <select id="inputStaff" class="d-inp" style="padding:10px;">
               <option value="大和地">大和地 (大)</option>
               <option value="草野">草野 (草)</option>
               <option value="菊池">菊池 (菊)</option>
               <option value="林">林 (林)</option>
               <option value="高橋">高橋 (千)</option>
-              <option value="未指定">その他 / 未指定</option>
+              <option value="デコレ">デコレ</option>
+              <option value="未記入不明店舗">未記入不明店舗</option>
             </select>
           </div>
         </div>
@@ -147,9 +148,9 @@
         </div>
       </section>
 
-      <!-- 日別集計サマリー -->
+      <!-- 日別・カテゴリ別集計サマリー -->
       <section class="card" style="background:#0b0f19;">
-        <div class="c-title"><span>担当別・合計集計</span><span id="summaryDateLabel" style="font-size:0.75rem; color:var(--sub);">累計</span></div>
+        <div class="c-title"><span>担当・店舗別 合計集計</span><span id="summaryDateLabel" style="font-size:0.75rem; color:var(--sub);">累計</span></div>
         <div class="summary-box" id="dailySummaryBox">
           <div style="color:var(--sub); text-align:center; padding:6px;">データはありません</div>
         </div>
@@ -201,16 +202,13 @@
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
-        // 1. 画像圧縮・リサイズ処理
         const compressedDataUrl = await resizeImage(file);
         currentUploadedImages.push(compressedDataUrl);
 
-        // 2. 最初の1枚に対してTesseract.jsでOCR実行
         if (i === 0) {
           try {
             const result = await Tesseract.recognize(compressedDataUrl, 'jpn+eng', {
-              logger: m => {} // 進捗ログ
+              logger: m => {}
             });
             const text = result.data.text;
             parseOcrText(text);
@@ -225,7 +223,6 @@
       e.target.value = '';
     }
 
-    // 画像リサイズ関数
     function resizeImage(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -252,23 +249,34 @@
       });
     }
 
-    // OCRテキストから金額・名義・担当者を自動抽出するロジック
+    // OCRテキストから金額・名義・担当者を自動判定
     function parseOcrText(text) {
       console.log("OCR読取結果:", text);
 
-      // 担当者の自動判定（大、草、菊、林、千 または フルネーム）
       const staffSelect = document.getElementById('inputStaff');
-      if (text.includes('大') || text.includes('大和地')) staffSelect.value = '大和地';
-      else if (text.includes('草') || text.includes('草野')) staffSelect.value = '草野';
-      else if (text.includes('菊') || text.includes('菊池')) staffSelect.value = '菊池';
-      else if (text.includes('林')) staffSelect.value = '林';
-      else if (text.includes('千') || text.includes('高橋')) staffSelect.value = '高橋';
+      
+      // キーワード判定（デコレ、大、草、菊、林、千など）
+      if (text.includes('デコレ')) {
+        staffSelect.value = 'デコレ';
+      } else if (text.includes('大') || text.includes('大和地')) {
+        staffSelect.value = '大和地';
+      } else if (text.includes('草') || text.includes('草野')) {
+        staffSelect.value = '草野';
+      } else if (text.includes('菊') || text.includes('菊池')) {
+        staffSelect.value = '菊池';
+      } else if (text.includes('林')) {
+        staffSelect.value = '林';
+      } else if (text.includes('千') || text.includes('高橋')) {
+        staffSelect.value = '高橋';
+      } else {
+        // 判定がつかない場合は「未記入不明店舗」へ自動セット
+        staffSelect.value = '未記入不明店舗';
+      }
 
-      // 金額の抽出（4桁〜7桁の数字、または¥マークの後の数字を探索）
+      // 金額の抽出
       const cleanedText = text.replace(/[,，]/g, '');
       const amountMatches = cleanedText.match(/(?:¥|￥)?\s*([1-9][0-9]{3,6})\s*(?:円)?/g);
       if (amountMatches && amountMatches.length > 0) {
-        // 最も大きそうな数値、または最初に見つかった金額候補を採用
         let nums = amountMatches.map(m => m.replace(/[^0-9]/g, '')).map(Number);
         let maxNum = Math.max(...nums);
         if (maxNum >= 1000) {
@@ -276,7 +284,7 @@
         }
       }
 
-      // 名義の簡易抽出（株式会社 や カ）などの法人名、またはそれらしい文字列を探す
+      // 名義の抽出
       const companyMatch = text.match(/(?:株式会社|有限会社|合同会社|カ\)|ｺ\)).{1,10}/);
       if (companyMatch) {
         document.getElementById('inputPayer').value = companyMatch[0];
@@ -302,11 +310,12 @@
       renderPreviews();
     }
 
-    // 手動入力時の担当者連動
+    // 名義入力時の自動振り分け連動
     document.getElementById('inputPayer').addEventListener('input', (e) => {
       const val = e.target.value;
       const staffSelect = document.getElementById('inputStaff');
-      if (val.includes('大')) staffSelect.value = '大和地';
+      if (val.includes('デコレ')) staffSelect.value = 'デコレ';
+      else if (val.includes('大')) staffSelect.value = '大和地';
       else if (val.includes('草')) staffSelect.value = '草野';
       else if (val.includes('菊')) staffSelect.value = '菊池';
       else if (val.includes('林')) staffSelect.value = '林';
@@ -339,7 +348,6 @@
       deposits.unshift(newDeposit);
       saveAndRefresh();
 
-      // フォームリセット
       document.getElementById('inputPayer').value = '';
       document.getElementById('inputAmount').value = '';
       currentUploadedImages = [];
@@ -398,7 +406,7 @@
 
     function renderDailySummary() {
       const summaryBox = document.getElementById('dailySummaryBox');
-      const staffList = ['大和地', '草野', '菊池', '林', '高橋', '未指定'];
+      const staffList = ['大和地', '草野', '菊池', '林', '高橋', 'デコレ', '未記入不明店舗'];
       let totals = {};
       staffList.forEach(s => totals[s] = 0);
       let grandTotal = 0;
@@ -407,7 +415,7 @@
         if (totals[d.staff] !== undefined) {
           totals[d.staff] += d.amount;
         } else {
-          totals['未指定'] = (totals['未指定'] || 0) + d.amount;
+          totals['未記入不明店舗'] = (totals['未記入不明店舗'] || 0) + d.amount;
         }
         grandTotal += d.amount;
       });
@@ -417,7 +425,7 @@
         if (totals[staff] > 0) {
           html += `
             <div class="summary-row">
-              <span style="font-weight:bold; color:var(--text);">担当: <span style="color:var(--primary);">${staff}</span></span>
+              <span style="font-weight:bold; color:var(--text);">担当/店舗: <span style="color:var(--primary);">${staff}</span></span>
               <span style="font-weight:900; color:var(--text);">¥${totals[staff].toLocaleString()}</span>
             </div>
           `;
