@@ -1,12 +1,9 @@
-```html
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>DEPOSIT AUTO MANAGER (Fixed)</title>
-  <!-- Tesseract.js (OCR用ライブラリ) -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
+  <title>DEPOSIT MANAGER</title>
   <style>
     :root {
       --bg: #030712; --card: #111827; --card-border: #374151; --primary: #10b981; --text: #f9fafb; --sub: #9ca3af; --border: #4b5563; --red: #ef4444; --reply: #3b82f6;
@@ -38,11 +35,19 @@
 
     .c-title { font-size: 0.9rem; font-weight: bold; color: var(--primary); display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 8px; flex-shrink: 0; }
     
-    .drop-zone {
-      border: 3px dashed var(--primary); border-radius: 14px; padding: 24px; text-align: center;
-      background: rgba(16, 185, 129, 0.05); cursor: pointer; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center;
-    }
-    .drop-zone:active { background: rgba(16, 185, 129, 0.15); }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 0.75rem; color: var(--sub); font-weight: bold; }
+    .d-inp, select { background: #020408; border: 2px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-size: 0.9rem; width: 100%; outline: none; }
+    .d-inp:focus, select:focus { border-color: var(--primary); }
+
+    .preview-container { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; min-height: 60px; }
+    .preview-thumb { position: relative; width: 50px; height: 50px; border-radius: 8px; overflow: hidden; border: 2px solid var(--primary); flex-shrink: 0; background: #000; }
+    .preview-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .preview-thumb .del-thumb { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; border: none; font-size: 0.6rem; width: 16px; height: 16px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    .tools { display: flex; gap: 6px; justify-content: space-between; align-items: center; margin-top: 4px; }
+    .btn { background: #1f2937; color: var(--text); border: 2px solid var(--border); padding: 8px 12px; border-radius: 8px; font-weight: bold; font-size: 0.75rem; cursor: pointer; }
+    .sbtn { background: var(--primary); color: #000; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 900; font-size: 0.85rem; cursor: pointer; margin-left: auto; box-shadow: 0 3px 6px rgba(16,185,129,0.4); }
 
     .table-container { width: 100%; overflow-x: auto; background: #020408; border-radius: 10px; border: 2px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.75rem; text-align: left; }
@@ -59,25 +64,13 @@
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 10000; justify-content: center; align-items: center; padding: 10px; }
     .m-card { background: var(--card); border: 3px solid var(--card-border); border-radius: 18px; width: 100%; max-width: 480px; max-height: 90vh; display: flex; flex-direction: column; padding: 16px; gap: 12px; box-shadow: 0 12px 30px rgba(0,0,0,0.7); }
     .m-head { font-weight: bold; font-size: 0.95rem; color: var(--primary); display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 8px; }
-    
-    #loadingOverlay { display: none; position: fixed; inset: 0; background: rgba(3,7,18,0.6); z-index: 30000; justify-content: center; align-items: center; pointer-events: none; }
-    .loading-box { background: linear-gradient(145deg, #111827, #06241b); border: 4px solid var(--primary); padding: 20px 30px; border-radius: 20px; display: flex; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(16,185,129,0.4); pointer-events: auto; }
-    .spinner { width: 32px; height: 32px; border: 4px solid rgba(16, 185, 129, 0.2); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-  <div id="loadingOverlay">
-    <div class="loading-box">
-      <div class="spinner"></div>
-      <div id="loadingText" style="font-size: 1.05rem; font-weight: 900; color: var(--primary);">高精度解析中...</div>
-    </div>
-  </div>
-
   <div class="app">
     <header>
-      <div class="brand">DEPOSIT AUTO MANAGER</div>
+      <div class="brand">DEPOSIT MANAGER</div>
       <div class="btns">
         <button class="ibtn" onclick="exportData()">データ書き出し</button>
       </div>
@@ -85,18 +78,57 @@
 
     <div class="date-banner" id="todayDateBanner">読み込み中...</div>
 
-    <!-- メインスクロールコンテナ -->
     <div class="main" id="mainContainer">
+      <!-- 新規入力カード -->
       <section class="card new-post-card">
-        <div class="c-title"><span>入金書類・通帳のアップロード</span></div>
-        <label class="drop-zone">
-          <div style="font-size: 1.5rem;">📸</div>
-          <div style="font-weight: 900; font-size: 0.9rem; color: var(--primary);">タップして画像を選択・撮影</div>
-          <div style="font-size: 0.7rem; color: var(--sub);">複数枚同時選択可。自動で解析され表に整理されます。</div>
-          <input type="file" accept="image/*" multiple style="display:none;" onchange="handleImagesUpload(event)">
-        </label>
+        <div class="c-title"><span>新規入金データの登録</span></div>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">入金日</label>
+            <input type="date" id="inputDate" class="d-inp">
+          </div>
+          <div class="form-group">
+            <label class="form-label">担当 / 店舗</label>
+            <select id="inputStaff" class="d-inp" style="padding:10px;">
+              <option value="大和地">大和地 (大)</option>
+              <option value="草野">草野 (草)</option>
+              <option value="菊池">菊池 (菊)</option>
+              <option value="林">林 (林)</option>
+              <option value="高橋">高橋 (千)</option>
+              <option value="デコレ">デコレ</option>
+              <option value="未記入不明店舗">未記入不明店舗</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">入金名義 (振込人)</label>
+            <input type="text" id="inputPayer" class="d-inp" placeholder="例: カ）ヤマダストア">
+          </div>
+          <div class="form-group">
+            <label class="form-label">金額 (円)</label>
+            <input type="number" id="inputAmount" class="d-inp" placeholder="例: 50000">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">書類・通帳画像 (複数選択可)</label>
+          <div class="preview-container" id="previewContainer">
+            <span style="font-size: 0.75rem; color: var(--sub); align-self: center;">画像未選択</span>
+          </div>
+          <div class="tools">
+            <label class="btn" style="cursor:pointer; background:var(--reply); color:white; border-color:var(--reply);">
+              ＋ 画像を選ぶ
+              <input type="file" accept="image/*" multiple style="display:none;" onchange="handleImagesSelect(event)">
+            </label>
+            <button class="sbtn" onclick="submitDeposit()">リストに追加</button>
+          </div>
+        </div>
       </section>
 
+      <!-- 集計サマリー -->
       <section class="card" style="background:#0b0f19;">
         <div class="c-title"><span>担当・店舗別 合計集計</span></div>
         <div class="summary-box" id="dailySummaryBox">
@@ -104,6 +136,7 @@
         </div>
       </section>
 
+      <!-- 一覧テーブル -->
       <section class="card">
         <div class="c-title"><span>入金一覧テーブル</span></div>
         <div class="table-container" id="tableContainer">
@@ -123,7 +156,8 @@
   </div>
 
   <script>
-    let deposits = JSON.parse(localStorage.getItem('DAM_FIXED_DEPOSITS')) || [];
+    let deposits = JSON.parse(localStorage.getItem('DM_LIGHT_DEPOSITS')) || [];
+    let currentUploadedImages = [];
 
     window.onload = () => {
       initDate();
@@ -134,73 +168,24 @@
     function initDate() {
       const now = new Date();
       const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()].toUpperCase()})</span><span>自動解析モード</span>`;
+      document.getElementById('todayDateBanner').innerHTML = `<span>${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} (${weekdays[now.getDay()].toUpperCase()})</span><span>入金管理システム</span>`;
+      
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      document.getElementById('inputDate').value = dateStr;
     }
 
-    async function handleImagesUpload(e) {
+    function handleImagesSelect(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
-      // 現在のスクロール位置を保持
-      const mainContainer = document.getElementById('mainContainer');
-      const currentScrollTop = mainContainer.scrollTop;
-
-      showLoading(`全 ${files.length} 枚を高精度前処理＆解析中...`);
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const processedDataUrl = await preprocessImageForOCR(file);
-
-        try {
-          const result = await Tesseract.recognize(processedDataUrl, 'jpn+eng', {
-            logger: m => {}
-          });
-          const text = result.data.text;
-          const parsed = parseOcrDataHighAccuracy(text);
-
-          deposits.unshift({
-            id: 'D_' + Date.now() + '_' + i,
-            date: parsed.date,
-            staff: parsed.staff,
-            payer: parsed.payer,
-            amount: parsed.amount,
-            image: processedDataUrl,
-            createdAt: new Date().getTime()
-          });
-        } catch (err) {
-          console.log('OCR解析エラー:', err);
-          deposits.unshift({
-            id: 'D_' + Date.now() + '_' + i,
-            date: new Date().toISOString().split('T')[0],
-            staff: '未記入不明店舗',
-            payer: '解析エラー/不明',
-            amount: 0,
-            image: processedDataUrl,
-            createdAt: new Date().getTime()
-          });
-        }
-      }
-
-      saveAndRefresh();
-      hideLoading();
-      
-      // 描画後に元のスクロール位置に戻す
-      setTimeout(() => {
-        mainContainer.scrollTop = currentScrollTop;
-      }, 50);
-
-      e.target.value = '';
-    }
-
-    function preprocessImageForOCR(file) {
-      return new Promise((resolve) => {
+      Array.from(files).forEach(file => {
         const reader = new FileReader();
         reader.onload = ev => {
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
             let w = img.width, h = img.height;
-            const MAX_SIZE = 1200;
+            const MAX_SIZE = 800;
             if (w > MAX_SIZE || h > MAX_SIZE) {
               if (w > h) { h = Math.round(h * (MAX_SIZE / w)); w = MAX_SIZE; }
               else { w = Math.round(w * (MAX_SIZE / h)); h = MAX_SIZE; }
@@ -208,76 +193,81 @@
             canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
-
-            let imgData = ctx.getImageData(0, 0, w, h);
-            let d = imgData.data;
-            for (let i = 0; i < d.length; i += 4) {
-              let avg = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114);
-              let enhanced = avg < 110 ? avg * 0.7 : (avg > 200 ? 255 : avg);
-              d[i] = enhanced;
-              d[i+1] = enhanced;
-              d[i+2] = enhanced;
-            }
-            ctx.putImageData(imgData, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
+            currentUploadedImages.push(canvas.toDataURL('image/jpeg', 0.7));
+            renderPreviews();
           };
           img.src = ev.target.result;
         };
         reader.readAsDataURL(file);
       });
+      e.target.value = '';
     }
 
-    function parseOcrDataHighAccuracy(text) {
-      const nowYear = new Date().getFullYear();
-      let date = `${nowYear}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
-      let staff = '未記入不明店舗';
-      let payer = '不明名義';
-      let amount = 0;
+    function renderPreviews() {
+      const container = document.getElementById('previewContainer');
+      if (currentUploadedImages.length === 0) {
+        container.innerHTML = `<span style="font-size: 0.75rem; color: var(--sub); align-self: center;">画像未選択</span>`;
+        return;
+      }
+      container.innerHTML = currentUploadedImages.map((imgSrc, idx) => `
+        <div class="preview-thumb">
+          <img src="${imgSrc}">
+          <button class="del-thumb" onclick="removePreview(${idx})">✕</button>
+        </div>
+      `).join('');
+    }
 
-      let dateMatch = text.match(/(20[2-3][0-9])[\/\-年\s]*([1-9]|1[0-2])[\/\-月\s]*([1-9]|[1-2][0-9]|3[0-1])/);
-      if (dateMatch) {
-        date = `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, '0')}-${String(dateMatch[3]).padStart(2, '0')}`;
-      } else {
-        let shortDateMatch = text.match(/([1-9]|1[0-2])[\/\-月\s]+([1-9]|[1-2][0-9]|3[0-1])日?/);
-        if (shortDateMatch) {
-          date = `${nowYear}-${String(shortDateMatch[1]).padStart(2, '0')}-${String(shortDateMatch[2]).padStart(2, '0')}`;
-        }
+    function removePreview(idx) {
+      currentUploadedImages.splice(idx, 1);
+      renderPreviews();
+    }
+
+    document.getElementById('inputPayer').addEventListener('input', (e) => {
+      const val = e.target.value;
+      const staffSelect = document.getElementById('inputStaff');
+      if (val.includes('デコレ')) staffSelect.value = 'デコレ';
+      else if (val.includes('大')) staffSelect.value = '大和地';
+      else if (val.includes('草')) staffSelect.value = '草野';
+      else if (val.includes('菊')) staffSelect.value = '菊池';
+      else if (val.includes('林')) staffSelect.value = '林';
+      else if (val.includes('千') || val.includes('高橋')) staffSelect.value = '高橋';
+    });
+
+    function submitDeposit() {
+      const date = document.getElementById('inputDate').value;
+      const staff = document.getElementById('inputStaff').value;
+      const payer = document.getElementById('inputPayer').value.trim();
+      const amount = Number(document.getElementById('inputAmount').value);
+
+      if (!date || !payer || !amount) {
+        alert('「入金日」「入金名義」「金額」を入力してください。');
+        return;
       }
 
-      const cleanText = text.replace(/[\s\n\r]/g, '');
-      if (cleanText.includes('デコレ')) {
-        staff = 'デコレ';
-      } else if (cleanText.includes('大和地') || cleanText.includes('大和') || cleanText.includes('豊')) {
-        staff = '大和地';
-      } else if (cleanText.includes('草野') || cleanText.includes('草')) {
-        staff = '草野';
-      } else if (cleanText.includes('菊池') || cleanText.includes('菊')) {
-        staff = '菊池';
-      } else if (cleanText.includes('林')) {
-        staff = '林';
-      } else if (cleanText.includes('高橋') || cleanText.includes('千')) {
-        staff = '高橋';
-      } else {
-        staff = '未記入不明店舗';
-      }
+      const mainContainer = document.getElementById('mainContainer');
+      const currentScrollTop = mainContainer.scrollTop;
 
-      const cleanedNumText = text.replace(/[,，]/g, '');
-      const amountMatches = cleanedNumText.match(/(?:¥|￥|円)?\s*([1-9][0-9]{3,7})\s*(?:円)?/g);
-      if (amountMatches && amountMatches.length > 0) {
-        let nums = amountMatches.map(m => m.replace(/[^0-9]/g, '')).map(Number);
-        let maxNum = Math.max(...nums);
-        if (maxNum >= 1000) amount = maxNum;
-      }
+      const newDeposit = {
+        id: 'D_' + Date.now(),
+        date: date,
+        staff: staff,
+        payer: payer,
+        amount: amount,
+        images: [...currentUploadedImages],
+        createdAt: new Date().getTime()
+      };
 
-      let payerMatch = text.match(/(?:株式会社|有限会社|合同会社|カ\)|ｺ\)).{1,12}/);
-      if (payerMatch) {
-        payer = payerMatch[0];
-      } else {
-        let kanaMatch = text.match(/[ァ-ンー]{3,10}/);
-        if (kanaMatch) payer = kanaMatch[0];
-      }
+      deposits.unshift(newDeposit);
+      saveAndRefresh();
 
-      return { date, staff, payer, amount };
+      document.getElementById('inputPayer').value = '';
+      document.getElementById('inputAmount').value = '';
+      currentUploadedImages = [];
+      renderPreviews();
+
+      setTimeout(() => {
+        mainContainer.scrollTop = currentScrollTop;
+      }, 50);
     }
 
     function deleteDeposit(id) {
@@ -295,7 +285,7 @@
     }
 
     function saveAndRefresh() {
-      localStorage.setItem('DAM_FIXED_DEPOSITS', JSON.stringify(deposits));
+      localStorage.setItem('DM_LIGHT_DEPOSITS', JSON.stringify(deposits));
       renderTable();
       renderDailySummary();
     }
@@ -323,10 +313,11 @@
       `;
 
       deposits.forEach(d => {
+        const firstImg = d.images && d.images.length > 0 ? d.images[0] : null;
         html += `
           <tr>
             <td>
-              ${d.image ? `<div style="width:32px; height:32px; border-radius:4px; overflow:hidden; border:1px solid var(--border); cursor:pointer;" onclick="openImageModal('${d.image}')"><img src="${d.image}" style="width:100%; height:100%; object-fit:cover;"></div>` : '-'}
+              ${firstImg ? `<div style="width:32px; height:32px; border-radius:4px; overflow:hidden; border:1px solid var(--border); cursor:pointer;" onclick="openImageModal('${firstImg}')"><img src="${firstImg}" style="width:100%; height:100%; object-fit:cover;"></div>` : '-'}
             </td>
             <td>${d.date}</td>
             <td><span style="background:rgba(16,185,129,0.2); color:var(--primary); padding:2px 6px; border-radius:4px; font-weight:bold;">${d.staff}</span></td>
@@ -391,19 +382,12 @@
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(deposits, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `deposit_hq_data_${new Date().toISOString().split('T')[0]}.json`);
+      downloadAnchor.setAttribute("download", `deposit_data_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
     }
 
-    function showLoading(text) {
-      document.getElementById('loadingText').innerText = text;
-      document.getElementById('loadingOverlay').style.display = 'flex';
-    }
-    function hideLoading() {
-      document.getElementById('loadingOverlay').style.display = 'none';
-    }
     function closeModal(id) {
       document.getElementById(id).style.display = 'none';
     }
